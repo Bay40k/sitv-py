@@ -48,6 +48,34 @@ footnote `07`, link-end `08`, char-graphics `0b/0c`, image `0e`, linked image
 * **`0x1f` external link**: file index + target panel name in another INF, e.g.
   `M42100280048` → `M42100280048.htm`.
 
+### Tables
+Specification/parts tables are encoded with a small private vocabulary:
+
+* **`0x29` = table announce** — appears once near the top of a topic that
+  contains a table; carries no geometry.
+* **`0x2d` = table cell stream** — three sub-shapes, distinguished by length and
+  the byte after the code:
+  * `FF len 2d 01|08 ?? ncols [w0 w1 …]` (len ≥ 10) — **row definition**: a row
+    of `ncols` cells whose `u16` pixel widths set the HTML `colspan`s (each
+    width is rounded to a share of 80 total columns).
+  * `FF 04 2d 02` (and the bare byte **`0xF6`** between words) — **next-cell**
+    separator within the current row.
+  * `FF 05 2d 01 47 02` — **table end**.
+  * sub-shapes beginning `03`/`04` are per-cell attributes and are ignored.
+
+### Bitmaps
+* **G4 figures** (`usType 0x3459`): CCITT Group 4, wrapped in a TIFF.
+* **`bM` (`0x4d62`) bitmaps**: OS/2 1.x core header + IPF block stream
+  (`total u32, ublk u16, [size u16, ctype u8, data]*`). Per-block `ctype`:
+  `0` raw, `1` byte-RLE, `2` LZW. Each block decodes to `ublk` bytes; a short
+  block is padded with its last byte. **ctype 1 RLE**: control byte `c` — if
+  `c < 0x80` repeat the next byte `c+1` times, else copy the next
+  `(c & 0x7f) + 1` bytes literally. 1-bpp `bM` line art stores its palette with
+  reversed polarity (index 0 = black = paper) and is rendered inverted to match
+  the originals' black-on-white diagrams.
+* **Page-header spacer**: every topic opens with a 2×2 white `bM` bitmap
+  (offset `18144`) used as a scroll anchor; it is not a figure and is dropped.
+
 ## SM index files (per model-year)  — see `src/sitv/smindex.py`
 
 Records separated by `0x01`, sub-fields by `0x02`/`0x03`.

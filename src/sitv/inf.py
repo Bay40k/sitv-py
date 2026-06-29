@@ -101,19 +101,26 @@ class InfFile:
         self.title = self.h["title"].split(b"\0")[0].decode("latin-1")
 
     def _read_dictionary(self):
-        start = self.h["dictstart"]
-        end = start + self.h["dictlen"]
-        p = start
+        """Read the global word table: ``ndict`` length-prefixed byte strings.
+
+        Each entry is ``[len:u8][bytes...]`` where ``len`` *includes* its own
+        prefix byte, so the payload is ``len - 1`` bytes. Topic text never stores
+        words inline — it stores small indices into this table (via a per-slot
+        local table), which is how IPF achieves its compression.
+        """
+        p = self.h["dictstart"]
         words: List[str] = []
         data = self.data
         for _ in range(self.h["ndict"]):
-            ln = data[p] - 1
+            ln = data[p] - 1            # prefix counts itself
             p += 1
             words.append(data[p:p + ln].decode("cp850", "replace"))
             p += ln
         self.dictionary = words
 
     def _read_slot_offsets(self):
+        # A flat array of ``nslots`` little-endian u32 file offsets; a topic
+        # refers to its cells by index into this array (see _read_topics).
         n = self.h["nslots"]
         start = self.h["slotsstart"]
         self.slot_offsets = list(struct.unpack_from(f"<{n}I", self.data, start))
@@ -135,6 +142,22 @@ class InfFile:
 
     # ---- table of contents (topics) ----------------------------------
     def _read_topics(self):
+        """Parse the ``ntoc`` variable-length TOC records into ``Topic`` objects.
+
+        Each record is self-describing and laid out as::
+
+            +0  length    u8   total record size in bytes (used to skip to next)
+            +1  flags     u8   level (low nibble) + TOC_* bits
+            +2  numslots  u8   number of cell indices that follow
+            [ optional extended block, present iff flags & TOC_EXTENDED ]
+            ...           numslots * u16   slot indices into slot_offsets[]
+            ...           remaining bytes  cp850 title text
+
+        The extended block (window geometry etc.) is decoded only far enough to
+        skip it; its presence and contents are gated by two bitmask bytes ``w1``
+        and ``w2``, each set bit adding a fixed-size field. We keep ``group_index``
+        (the only field we need) and discard the rest.
+        """
         data = self.data
         p = self.h["tocstart"]
         end = p + self.h["toclen"]
@@ -143,26 +166,28 @@ class InfFile:
             if p >= end:
                 break
             start = p
-            length = data[p]
+            length = data[p]            # whole-record size; next record = start+length
             flags = data[p + 1]
             numslots = data[p + 2]
             q = p + 3
             group_index = 0
             if flags & TOC_EXTENDED:
+                # Two mask bytes; each set bit appends a fixed-width field.
                 w1 = data[q]
                 w2 = data[q + 1]
                 q += 2
                 if w1 & 1:
-                    q += 5      # position (THelpXYPair = flags u8 + x u16 + y u16)
+                    q += 5      # position  (THelpXYPair: flags u8 + x u16 + y u16)
                 if w1 & 2:
-                    q += 5      # size
+                    q += 5      # size      (same shape)
                 if w1 & 8:
-                    q += 2      # window controls
+                    q += 2      # window control flags
                 if w1 & 0x40:
-                    q += 2      # unknown / style
+                    q += 2      # style / unknown
                 if w2 & 4:
                     group_index = struct.unpack_from("<H", data, q)[0]
                     q += 2
+            # The cell index list, then whatever bytes remain are the title.
             slot_numbers = list(struct.unpack_from(f"<{numslots}H", data, q))
             q += numslots * 2
             title_len = length - (q - start)
@@ -174,6 +199,21 @@ class InfFile:
 
     # ---- slot text ----------------------------------------------------
     def get_slots(self, topic: Topic) -> List[Slot]:
+        """Resolve a topic's cell indices to ``Slot(localdict, text)`` records.
+
+        A cell (slot) on disk begins with an 8-byte header
+        ``<BIBH>`` = ``(unknown u8, localdictpos u32, nlocaldict u8, ntext u16)``:
+
+        * ``localdictpos`` points elsewhere in the file to an array of
+          ``nlocaldict`` u16 *global* dictionary indices — the cell's private
+          alphabet. The byte stream then indexes this small local table, so a
+          word costs one byte when ``nlocaldict <= 256``.
+        * the ``ntext`` bytes immediately after the header are that stream of
+          local indices interleaved with ``0xFA..0xFF`` formatting codes
+          (decoded in :mod:`sitv.render`).
+
+        Slots are cached on the ``Topic`` so repeated rendering is free.
+        """
         if topic._slots is not None:
             return topic._slots
         slots: List[Slot] = []

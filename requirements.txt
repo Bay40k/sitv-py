@@ -1,1 +1,4 @@
 Pillow>=9
+
+# For the test suite (python3 -m pytest tests/)
+pytest>=7
