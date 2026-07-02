@@ -1,43 +1,104 @@
-# SITV — Reverse-engineered Mitsubishi service-manual viewer
+# sitv-py
 
-This project reconstructs the output of **SITV 1.08**, a long-dead OS/2 program
-that rendered the factory service manual for the 1994–1997 Mitsubishi Eclipse /
-Eclipse Spyder (Pub. MSCD-002B-97) into a web of HTML pages. The original
-software is unobtainable. What survives is the data that went *into* it
-(`input/`) and a partial sample of the HTML it produced (`output/`).
+**For anyone with a late-1990s factory service manual CD/DVD that shipped with a
+proprietary OS/2 viewer you can no longer run.**
 
-Given only those two things, the code here decodes the original binary data and
-regenerates a clean, browsable static site (`recreated/`) — one HTML page per
-manual topic, with every embedded diagram recovered as a PNG and every
-cross-reference link wired up.
+`sitv-py` decodes the undocumented binary formats on the disc and rebuilds the
+manual as a plain static website you can open in any browser. Each topic becomes
+an HTML page, with its diagrams recovered as PNGs and its cross-references turned
+into working links.
+
+It reproduces what **SITV 1.08** used to do. SITV was an OS/2 program that
+rendered these manuals into HTML, and it's no longer obtainable, so `sitv-py` was
+written from the raw disc data plus a small sample of the pages SITV produced.
+
+It has been tested on **MSCD-002B-97**, the 1994–1997 Mitsubishi Eclipse /
+Eclipse Spyder factory service manual. The disc uses the generic OS/2 IPF
+(Information Presentation Facility) help format, so `sitv-py` should also handle
+other service-manual CD/DVDs from the same era that use that format, though the
+Eclipse disc is the only one tested.
+
+## Directory layout
+
+The project uses three top-level data directories, all excluded from git:
+
+```
+input/       raw disc contents — the only thing needed to convert
+output/      a partial HTML sample from the original SITV viewer, kept only
+             for verification
+recreated/   everything sitv-py generates — the finished, browsable site
+```
+
+**`input/`** is a verbatim copy of the CD. Mount or rip the disc and copy it in
+as-is; this is the only directory a conversion actually needs:
+
+```
+input/
+  SM00016F              top-level SM index (root of the table-of-contents tree)
+  205/  220/            model codes (sales regions)
+    1994/ … 1997/       per-year SM****F index files (the navigation / TOC)
+  INF/
+    205/  220/          per-model content — OS/2 IPF "INF" compiled help files
+```
+
+**`output/`** is a reference sample of pages the original SITV software once
+produced. It is used **only to check coverage** — `verify.py` compares the
+recreated text against it — and is **not required to run a conversion**. When
+present it is a flat set of section folders holding the original `.htm` pages and
+their figures:
+
+```
+output/
+  00 -GENERAL/                            one folder per manual section
+    GENERAL DATA AND SPECIFICATIONS.htm   original .htm pages
+    M20500AL_00031.png                    original figures
+    …
+  00E-GENERAL ELECTRICAL/
+  11A-ENGINE MECHANICAL 4G63/
+  …
+```
+
+**`recreated/`** is where everything cleanly extracted from `input/` lands. Each
+configuration (model + year) gets its own subtree mirroring the manual's
+section / subsection hierarchy, plus two shared folders per config — `_images/`
+for de-duplicated figures and `_refs/` for the standalone pages that
+cross-references point at:
+
+```
+recreated/
+  index.html                          top-level picker across all configs
+  205-1994/                           one subtree per model-year configuration
+    index.html                        this config's table of contents
+    00 -GENERAL/                      section folder
+      HOW TO USE THIS MANUAL.html     topic pages
+      MAINTENANCE SERVICE/            subsections nest as sub-folders
+        …
+    11A-ENGINE MECHANICAL 4G63/
+    _images/                          de-duplicated figures (PNG)
+    _refs/                            standalone cross-reference target pages
+  205-1995/  205-1996/  205-1997/     further configurations
+  …
+```
+
+Open `recreated/index.html` in any browser to read the finished manual.
 
 ## Status
+
+The following figures are all measured on the one disc tested so far,
+**MSCD-002B-97** (the 1994–1997 Mitsubishi Eclipse):
 
 - **1,428 pages per model-year** across 6 configurations (205 & 220, 1994–1997).
 - **~5,650 figures per config decoded, 0 failures.**
 - **92.5 % word-5-gram coverage** of the reference `output/` sample (the missing
   few percent is mostly table whitespace and a handful of dangling source links).
-- Full rebuild in ~3 minutes; 39 unit tests.
+- Full rebuild in ~3 minutes.
+
+39 unit tests cover the format parsers.
 
 ## How it works
 
-The input is two kinds of file, both undocumented:
-
-```
-input/                 ← not in git; copy from the CD as described below
-  SM00016F             top-level SM index file (root of the TOC tree)
-  205/ 220/            model codes (sales regions)
-    1994/ … 1997/      per model-year SM**** index files (navigation/TOC)
-  INF/
-    *.INF              root-level compiled INF files
-    205/ 220/          per-model compiled content — OS/2 IPF "INF" help files
-```
-
-**Input source:** `input/` is the directory structure from the factory service
-manual CD (MSCD-002B-97), copied verbatim.  Mount or rip the CD and copy the
-contents into `input/` before running the build.  `input/` and `output/` are
-excluded from version control (see `.gitignore`).
-
+The input is two kinds of file, both undocumented (see the `input/` layout
+above): the `SM****F` navigation indexes and the OS/2 IPF `INF` content files.
 The build is a pipeline; each stage has its own module under `src/sitv/`:
 
 1. **`smindex.py` — navigation.** The `SM*****F` files are control-character
@@ -91,7 +152,7 @@ Open `recreated/index.html` in a browser.
 
 ## A note, and an apology
 
-This reconstruction was written with heavy use of an AI coding assistant. 
+Unfortunately, this reconstruction was written with heavy use of an AI coding assistant (Claude Code)
 
 Large-scale AI and the speculative build-out of hyperscale data centers are an environmental
 problem: grid strain, water draw, emissions, among other issues,
