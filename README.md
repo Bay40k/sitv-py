@@ -3,6 +3,18 @@
 **For anyone with a late-1990s factory service manual CD/DVD that shipped with a
 proprietary OS/2 viewer you can no longer run.**
 
+<div align="center">
+
+| **Example CD/DVD** |
+| :--------: |
+| <img width="400" alt="example_cd" src="https://github.com/user-attachments/assets/82f56ee7-2704-4263-8dfa-28db9ad60696" /> |
+
+| **Before** | **After** |
+| :--------: | :-------: |
+| <img width="400" alt="before" src="https://github.com/user-attachments/assets/10e1338f-a64c-4d48-b7af-ec4c8d49849e" /> | <img width="400" alt="after" src="https://github.com/user-attachments/assets/75967582-bb0a-4aad-b3ec-b2697b66e880" /> |
+
+</div>
+
 `sitv-py` decodes the undocumented binary formats on the disc and rebuilds the
 manual as a plain static website you can open in any browser. Each topic becomes
 an HTML page, with its diagrams recovered as PNGs and its cross-references turned
