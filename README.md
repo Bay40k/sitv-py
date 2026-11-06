@@ -1,7 +1,7 @@
 # sitv-py
 
-**For anyone with a late-1990s factory service manual CD/DVD that shipped with a
-proprietary OS/2 viewer you can no longer run.**
+# For anyone with a **late-1990s Mitsubishi** (and others) factory service manual CD/DVD that shipped with a
+proprietary OS/2 viewer you can no longer run.
 
 <div align="center">
 
